@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Networking Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg2: #161820;
+    --bg3: #1e2028;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #e8e9ed;
+    --text2: #9098a9;
+    --text3: #5a6070;
+    --red: #e24b4a;
+    --red-bg: rgba(226,75,74,0.12);
+    --orange: #ef9f27;
+    --orange-bg: rgba(239,159,39,0.12);
+    --yellow: #c9a227;
+    --green: #1d9e75;
+    --green-bg: rgba(29,158,117,0.12);
+    --purple: #7f77dd;
+    --purple-bg: rgba(127,119,221,0.12);
+    --radius: 10px;
+    --panel-width: 380px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
+
+  /* Upload screen */
+  .upload-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 2rem; }
+  .logo { font-size: 26px; font-weight: 600; letter-spacing: -0.5px; margin-bottom: 6px; }
+  .logo span { color: var(--purple); }
+  .tagline { font-size: 14px; color: var(--text2); margin-bottom: 48px; }
+  .upload-zone { border: 1.5px dashed var(--border2); border-radius: 16px; padding: 48px 64px; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--bg2); width: 100%; max-width: 480px; }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--purple); background: rgba(127,119,221,0.06); }
+  .upload-zone h3 { font-size: 16px; font-weight: 500; margin-bottom: 8px; }
+  .upload-zone p { font-size: 13px; color: var(--text2); }
+  .upload-zone input { display: none; }
+  .upload-icon { font-size: 36px; margin-bottom: 16px; color: var(--text3); }
+  .col-hint { margin-top: 28px; background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 16px 20px; max-width: 480px; width: 100%; }
+  .col-hint h4 { font-size: 11px; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+  .col-hint-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .col-tag { font-size: 11px; color: var(--text3); background: var(--bg3); border-radius: 6px; padding: 4px 8px; font-family: monospace; }
+
+  /* App screen — flex column filling viewport */
+  body { overflow: hidden; }
+  .app-screen { display: none; height: 100vh; flex-direction: column; }
+  .app-header { flex-shrink: 0; }
+
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 49px; border-bottom: 0.5px solid var(--border); background: var(--bg); }
+  .topbar-left { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .topbar-logo { font-size: 15px; font-weight: 600; white-space: nowrap; }
+  .topbar-logo span { color: var(--purple); }
+  .topbar-date { font-size: 12px; color: var(--text3); white-space: nowrap; }
+  .reload-btn { font-size: 12px; color: var(--text2); background: var(--bg3); border: 0.5px solid var(--border2); border-radius: 8px; padding: 6px 12px; cursor: pointer; transition: all 0.15s; white-space: nowrap; flex-shrink: 0; }
+  .reload-btn:hover { color: var(--text); border-color: var(--purple); }
+
+  .stats-bar { display: flex; gap: 10px; padding: 10px 24px; border-bottom: 0.5px solid var(--border); overflow-x: auto; flex-shrink: 0; }
+  .stat { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 8px 14px; flex: 1; min-width: 90px; }
+  .stat-label { font-size: 11px; color: var(--text3); margin-bottom: 2px; white-space: nowrap; }
+  .stat-val { font-size: 20px; font-weight: 500; }
+  .c-red { color: var(--red); }
+  .c-orange { color: var(--orange); }
+  .c-purple { color: var(--purple); }
+  .c-muted { color: var(--text3); }
+  .c-green { color: var(--green); }
+
+  .controls { display: flex; gap: 10px; padding: 8px 24px; border-bottom: 0.5px solid var(--border); flex-wrap: nowrap; align-items: center; flex-shrink: 0; }
+  .search-input { background: var(--bg2); border: 0.5px solid var(--border); border-radius: 8px; padding: 7px 12px; font-size: 13px; color: var(--text); flex: 1; min-width: 0; outline: none; transition: border-color 0.15s; height: 32px; }
+  .search-input:focus { border-color: var(--border2); }
+  .filter-select { background: var(--bg2); border: 0.5px solid var(--border); border-radius: 8px; padding: 0 12px; font-size: 13px; color: var(--text2); cursor: pointer; outline: none; transition: border-color 0.15s; height: 32px; white-space: nowrap; flex-shrink: 0; }
+  .filter-select:focus { border-color: var(--border2); }
+  .results-count { font-size: 12px; color: var(--text3); white-space: nowrap; flex-shrink: 0; }
+
+  /* Table area scrolls independently — thead top:0 works correctly here */
+  .main { flex: 1; overflow-y: auto; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { font-size: 11px; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; padding: 10px 16px; text-align: left; border-bottom: 0.5px solid var(--border); background: var(--bg); position: sticky; top: 0; z-index: 5; white-space: nowrap; cursor: pointer; user-select: none; transition: color 0.15s; }
+  thead th:hover { color: var(--text2); }
+  thead th .sort-arrow { margin-left: 4px; opacity: 0.4; font-size: 10px; }
+  thead th.sorted { color: var(--text2); }
+  thead th.sorted .sort-arrow { opacity: 1; color: var(--purple); }
+  tbody td { padding: 12px 16px; border-bottom: 0.5px solid var(--border); font-size: 13px; vertical-align: middle; }
+  tbody tr { cursor: pointer; transition: background 0.1s; }
+  tbody tr:hover td { background: var(--bg2); }
+  tbody tr.active td { background: rgba(127,119,221,0.07); }
+
+  .name-primary { font-weight: 500; font-size: 14px; color: var(--text); }
+  .name-secondary { font-size: 12px; color: var(--text3); margin-top: 1px; }
+
+  .freq-badge { font-size: 11px; padding: 3px 9px; border-radius: 99px; display: inline-block; white-space: nowrap; }
+  .f-monthly { background: rgba(29,158,117,0.15); color: #1d9e75; }
+  .f-quarterly { background: rgba(127,119,221,0.15); color: #7f77dd; }
+  .f-biannual { background: rgba(239,159,39,0.15); color: #ef9f27; }
+  .f-annual { background: rgba(255,255,255,0.07); color: var(--text2); }
+
+  .urg-wrap { display: flex; align-items: center; gap: 5px; }
+  .urg-score { font-size: 13px; font-weight: 500; }
+  .urg-hint { font-size: 11px; margin-top: 1px; }
+  .u-critical { color: var(--red); }
+  .u-high { color: var(--orange); }
+  .u-medium { color: var(--yellow); }
+  .u-low { color: var(--green); }
+  .u-checkin { color: var(--purple); }
+  .u-none { color: var(--text3); }
+
+  .days-val { font-size: 13px; color: var(--text2); }
+
+  .empty-state { text-align: center; padding: 64px 24px; color: var(--text3); font-size: 14px; }
+
+  /* Slide-in panel */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 99; }
+  .overlay.show { display: block; }
+  .panel { position: fixed; top: 0; right: -420px; width: var(--panel-width); height: 100vh; background: var(--bg2); border-left: 0.5px solid var(--border2); z-index: 100; transition: right 0.28s cubic-bezier(0.4,0,0.2,1); overflow-y: auto; }
+  .panel.open { right: 0; }
+  .panel-hdr { padding: 20px 20px 16px; border-bottom: 0.5px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; position: sticky; top: 0; background: var(--bg2); z-index: 1; }
+  .panel-name { font-size: 18px; font-weight: 600; margin-bottom: 3px; line-height: 1.2; }
+  .panel-sub { font-size: 12px; color: var(--text2); line-height: 1.4; }
+  .panel-close { background: none; border: none; color: var(--text3); font-size: 18px; cursor: pointer; padding: 2px 6px; border-radius: 6px; transition: color 0.15s; line-height: 1; flex-shrink: 0; }
+  .panel-close:hover { color: var(--text); }
+  .panel-body { padding: 16px 20px; }
+  .urg-banner { display: flex; align-items: center; gap: 10px; background: var(--bg3); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
+  .urg-banner-score { font-size: 24px; font-weight: 600; }
+  .urg-banner-label { font-size: 12px; color: var(--text2); }
+  .checkin-banner { background: var(--purple-bg); border: 0.5px solid rgba(127,119,221,0.25); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; }
+  .checkin-label { font-size: 10px; color: var(--purple); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; margin-bottom: 3px; }
+  .checkin-val { font-size: 13px; color: var(--text); }
+  .section-label { font-size: 10px; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; margin-top: 16px; }
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .detail-field { background: var(--bg3); border-radius: 8px; padding: 8px 10px; }
+  .detail-field-label { font-size: 10px; color: var(--text3); margin-bottom: 2px; }
+  .detail-field-val { font-size: 13px; color: var(--text); }
+  .notes-box { background: var(--bg3); border-radius: 8px; padding: 10px 12px; font-size: 13px; color: var(--text2); line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+</style>
+</head>
+<body>
+
+<div class="upload-screen" id="uploadScreen">
+  <div class="logo">Networking Tracker<span>.</span></div>
+  <div class="tagline">Upload your Excel file to get started</div>
+  <div class="upload-zone" id="uploadZone">
+    <div class="upload-icon">&#8679;</div>
+    <h3>Drop your Excel file here</h3>
+    <p>or click to browse &nbsp;&middot;&nbsp; .xlsx files only</p>
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+  </div>
+  <div class="col-hint">
+    <h4>Expected column headers</h4>
+    <div class="col-hint-grid">
+      <div class="col-tag">First Name</div>
+      <div class="col-tag">Last Name</div>
+      <div class="col-tag">Frequency</div>
+      <div class="col-tag">Freq (Days)</div>
+      <div class="col-tag">Last Contacted</div>
+      <div class="col-tag">Check In Date</div>
+      <div class="col-tag">Check In Reason</div>
+      <div class="col-tag">Company</div>
+      <div class="col-tag">Position</div>
+      <div class="col-tag">Category</div>
+      <div class="col-tag">Notes</div>
+    </div>
+  </div>
+</div>
+
+<div class="app-screen" id="appScreen">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-logo">Networking Tracker<span>.</span></div>
+      <div class="topbar-date" id="topDate"></div>
+    </div>
+    <button class="reload-btn" onclick="resetApp()">&#8635; Load new file</button>
+  </div>
+  <div class="stats-bar" id="statsBar"></div>
+  <div class="controls">
+    <input class="search-input" type="text" placeholder="Search by name or company..." id="searchInput" oninput="renderTable()">
+    <select class="filter-select" id="freqFilter" onchange="renderTable()">
+      <option value="">All frequencies</option>
+      <option value="monthly">Monthly</option>
+      <option value="quarterly">Quarterly</option>
+      <option value="biannual">Biannual</option>
+      <option value="annual">Annual</option>
+    </select>
+    <select class="filter-select" id="statusFilter" onchange="renderTable()">
+      <option value="">All statuses</option>
+      <option value="critical">Critical 2x+</option>
+      <option value="overdue">Overdue 1x+</option>
+      <option value="checkin">Check-in due</option>
+      <option value="nodate">No date</option>
+    </select>
+    <div class="results-count" id="resultsCount"></div>
+  </div>
+  <div class="main">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="setSort('name')" id="th-name">Name <span class="sort-arrow" id="sa-name"></span></th>
+            <th onclick="setSort('freq')" id="th-freq">Frequency <span class="sort-arrow" id="sa-freq"></span></th>
+            <th onclick="setSort('urgency')" id="th-urgency" class="sorted">Urgency <span class="sort-arrow" id="sa-urgency">&#9660;</span></th>
+            <th onclick="setSort('days')" id="th-days">Days Since <span class="sort-arrow" id="sa-days"></span></th>
+            <th onclick="setSort('company')" id="th-company">Company <span class="sort-arrow" id="sa-company"></span></th>
+            <th onclick="setSort('category')" id="th-category">Category <span class="sort-arrow" id="sa-category"></span></th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+      <div class="empty-state" id="emptyMsg" style="display:none;">No contacts match your filters.</div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay" onclick="closePanel()"></div>
+<div class="panel" id="panel">
+  <div class="panel-hdr">
+    <div>
+      <div class="panel-name" id="panelName"></div>
+      <div class="panel-sub" id="panelSub"></div>
+    </div>
+    <button class="panel-close" onclick="closePanel()">&#x2715;</button>
+  </div>
+  <div class="panel-body" id="panelBody"></div>
+</div>
+
+<script>
+let contacts = [];
+let activeId = null;
+let sortCol = 'urgency';
+let sortDir = -1;
+
+// Robust column finder — tries multiple name variants
+function getCol(row, ...keys) {
+  const rowKeys = Object.keys(row);
+  for (const k of keys) {
+    // exact match first
+    for (const rk of rowKeys) {
+      if (rk.trim() === k) return row[rk];
+    }
+    // case-insensitive
+    const kl = k.toLowerCase();
+    for (const rk of rowKeys) {
+      if (rk.trim().toLowerCase() === kl) return row[rk];
+    }
+    // stripped (remove spaces, parens, hyphens)
+    const ks = k.toLowerCase().replace(/[\s\(\)\-]+/g,'');
+    for (const rk of rowKeys) {
+      if (rk.trim().toLowerCase().replace(/[\s\(\)\-]+/g,'') === ks) return row[rk];
+    }
+  }
+  return null;
+}
+
+function parseExcelDate(val) {
+  if (val === null || val === undefined || val === '') return null;
+  if (val instanceof Date) return isNaN(val) ? null : val;
+  if (typeof val === 'number') {
+    // Excel serial date
+    const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+    return isNaN(d) ? null : d;
+  }
+  if (typeof val === 'string') {
+    const d = new Date(val);
+    return isNaN(d) ? null : d;
+  }
+  return null;
+}
+
+function daysSince(d) {
+  if (!d) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dd = new Date(d); dd.setHours(0,0,0,0);
+  return Math.round((today - dd) / 86400000);
+}
+
+function daysUntil(d) {
+  if (!d) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dd = new Date(d); dd.setHours(0,0,0,0);
+  return Math.round((dd - today) / 86400000);
+}
+
+function calcUrgency(lastContacted, freqDays, checkInDate) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  if (checkInDate) {
+    const du = daysUntil(checkInDate);
+    if (du <= 0) return 10;
+    if (du <= 14) return 2;
+  }
+  if (!lastContacted || !freqDays || freqDays <= 0) return null;
+  const ds = daysSince(lastContacted);
+  if (ds === null) return null;
+  return Math.round((ds / freqDays) * 10) / 10;
+}
+
+function urgMeta(score, checkInDate, checkInReason) {
+  if (score === 10) return { cls:'u-critical', label:'10x', hint:'check-in overdue' };
+  if (score === 2 && checkInDate) {
+    const du = daysUntil(checkInDate);
+    return { cls:'u-checkin', label:'2x', hint: du <= 0 ? 'check-in due' : `check-in in ${du}d` + (checkInReason ? ` — ${checkInReason}` : '') };
+  }
+  if (score === null) return { cls:'u-none', label:'—', hint:'' };
+  if (score >= 2)   return { cls:'u-critical', label:`${score}x`, hint:'critical' };
+  if (score >= 1)   return { cls:'u-high',     label:`${score}x`, hint:'overdue' };
+  if (score >= 0.7) return { cls:'u-medium',   label:`${score}x`, hint:'due soon' };
+  return              { cls:'u-low',      label:`${score}x`, hint:'on track' };
+}
+
+function freqInfo(tier) {
+  const t = (tier||'').toLowerCase();
+  if (t.includes('month'))                          return { cls:'f-monthly',   label:'Monthly' };
+  if (t.includes('quarter'))                        return { cls:'f-quarterly', label:'Quarterly' };
+  if (t.includes('bi') || t.includes('semi') || t.includes('6 m') || t === 'biannual') return { cls:'f-biannual',  label:'Biannual' };
+  return { cls:'f-annual', label:'Annual' };
+}
+
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
+
+function loadContacts(rows) {
+  // Debug: log first row keys
+  if (rows.length > 0) console.log('Column headers found:', Object.keys(rows[0]));
+  
+  contacts = rows
+    .filter(r => getCol(r, 'First Name', 'first name', 'firstname'))
+    .map((r, i) => {
+      const fn        = (getCol(r, 'First Name', 'first name', 'firstname') || '').toString().trim();
+      const ln        = (getCol(r, 'Last Name', 'last name', 'lastname') || '').toString().trim();
+      const freq      = (getCol(r, 'Frequency', 'frequency', 'freq', 'tier') || '').toString().trim();
+      const freqDays  = parseFloat(getCol(r, 'Freq (Days)', 'freq (days)', 'Freq(Days)', 'FreqDays', 'frequency days', 'freq days', 'days') || 0) || null;
+      const lastCont  = parseExcelDate(getCol(r, 'Last Contacted', 'last contacted', 'lastcontacted', 'last contact'));
+      const checkInD  = parseExcelDate(getCol(r, 'Check In Date', 'check in date', 'checkindate', 'Check In By', 'check in by', 'checkinby'));
+      const checkInR  = (getCol(r, 'Check In Reason', 'check in reason', 'checkinreason') || '').toString().trim();
+      const company   = (getCol(r, 'Company', 'company', 'employer') || '').toString().trim();
+      const position  = (getCol(r, 'Position', 'position', 'title', 'role', 'job title') || '').toString().trim();
+      const category  = (getCol(r, 'Category', 'category', 'group') || '').toString().trim();
+      const notes     = (getCol(r, 'Notes', 'notes', 'note', 'comments') || '').toString().trim();
+      const ds        = daysSince(lastCont);
+      const urgency   = calcUrgency(lastCont, freqDays, checkInD);
+
+      return { id:i, fn, ln, name:`${fn} ${ln}`.trim(), freq, freqDays, lastCont, checkInD, checkInR, company, position, category, notes, ds, urgency };
+    });
+}
+
+function renderStats() {
+  const total    = contacts.length;
+  const critical = contacts.filter(c => c.urgency !== null && c.urgency >= 2 && c.urgency !== 2).length + contacts.filter(c => c.urgency === 10).length;
+  const overdue  = contacts.filter(c => c.urgency !== null && c.urgency >= 1 && c.urgency < 2 && c.urgency !== 2).length;
+  const checkin  = contacts.filter(c => c.urgency === 2).length;
+  const ontrack  = contacts.filter(c => c.urgency !== null && c.urgency < 1).length;
+  const nodate   = contacts.filter(c => c.urgency === null).length;
+  document.getElementById('statsBar').innerHTML = `
+    <div class="stat"><div class="stat-label">Total</div><div class="stat-val">${total}</div></div>
+    <div class="stat"><div class="stat-label">Critical 2x+</div><div class="stat-val c-red">${contacts.filter(c=>c.urgency!==null&&c.urgency>=2).length}</div></div>
+    <div class="stat"><div class="stat-label">Overdue 1x+</div><div class="stat-val c-orange">${contacts.filter(c=>c.urgency!==null&&c.urgency>=1&&c.urgency<2).length}</div></div>
+    <div class="stat"><div class="stat-label">Check-ins due</div><div class="stat-val c-purple">${checkin}</div></div>
+    <div class="stat"><div class="stat-label">On track</div><div class="stat-val c-green">${ontrack}</div></div>
+    <div class="stat"><div class="stat-label">No date</div><div class="stat-val c-muted">${nodate}</div></div>
+  `;
+}
+
+function setSort(col) {
+  if (sortCol === col) { sortDir *= -1; }
+  else { sortCol = col; sortDir = col === 'urgency' ? -1 : 1; }
+  ['name','freq','urgency','days','company','category'].forEach(c => {
+    const th = document.getElementById('th-'+c);
+    const sa = document.getElementById('sa-'+c);
+    if (c === sortCol) { th.classList.add('sorted'); sa.innerHTML = sortDir === 1 ? '&#9650;' : '&#9660;'; }
+    else { th.classList.remove('sorted'); sa.innerHTML = ''; }
+  });
+  renderTable();
+}
+
+function sortVal(c) {
+  if (sortCol === 'name')     return c.name.toLowerCase();
+  if (sortCol === 'freq')     return c.freqDays || 9999;
+  if (sortCol === 'urgency')  return c.urgency === null ? -Infinity : c.urgency;
+  if (sortCol === 'days')     return c.ds === null ? -1 : c.ds;
+  if (sortCol === 'company')  return (c.company||'').toLowerCase();
+  if (sortCol === 'category') return (c.category||'').toLowerCase();
+  return 0;
+}
+
+function renderTable() {
+  const search  = (document.getElementById('searchInput').value||'').toLowerCase();
+  const freqF   = (document.getElementById('freqFilter').value||'').toLowerCase();
+  const statusF = document.getElementById('statusFilter').value;
+
+  let filtered = contacts.filter(c => {
+    if (search && !c.name.toLowerCase().includes(search) && !(c.company||'').toLowerCase().includes(search)) return false;
+    if (freqF) { const fl = freqInfo(c.freq).label.toLowerCase(); if (!fl.includes(freqF)) return false; }
+    if (statusF === 'critical' && !(c.urgency !== null && c.urgency >= 2)) return false;
+    if (statusF === 'overdue'  && !(c.urgency !== null && c.urgency >= 1 && c.urgency < 2)) return false;
+    if (statusF === 'checkin'  && c.urgency !== 2) return false;
+    if (statusF === 'nodate'   && c.urgency !== null) return false;
+    return true;
+  });
+
+  filtered.sort((a,b) => {
+    const av = sortVal(a), bv = sortVal(b);
+    if (av === bv) return 0;
+    if (av === -Infinity) return 1;
+    if (bv === -Infinity) return -1;
+    if (typeof av === 'string') return av < bv ? -sortDir : sortDir;
+    return (bv - av) * (sortDir === -1 ? 1 : -1);
+  });
+
+  document.getElementById('resultsCount').textContent = `${filtered.length} contact${filtered.length !== 1 ? 's' : ''}`;
+
+  const tbody = document.getElementById('tableBody');
+  const empty = document.getElementById('emptyMsg');
+  if (!filtered.length) { tbody.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = filtered.map(c => {
+    const meta = urgMeta(c.urgency, c.checkInD, c.checkInR);
+    const fi   = freqInfo(c.freq);
+    return `<tr onclick="openPanel(${c.id})" class="${activeId===c.id?'active':''}">
+      <td>
+        <div class="name-primary">${c.name}</div>
+        ${c.company ? `<div class="name-secondary">${c.company}</div>` : ''}
+      </td>
+      <td><span class="freq-badge ${fi.cls}">${fi.label}</span></td>
+      <td>
+        <div class="urg-wrap">
+          <span class="urg-score ${meta.cls}">${meta.label}</span>
+        </div>
+        ${meta.hint ? `<div class="urg-hint ${meta.cls}" style="font-size:11px;opacity:0.8;">${meta.hint}</div>` : ''}
+      </td>
+      <td><span class="days-val">${c.ds !== null ? c.ds+'d' : '—'}</span></td>
+      <td style="font-size:12px;">
+        ${c.position ? `<div style="color:var(--text);font-size:12px;">${c.position}</div>` : ''}
+        ${c.company  ? `<div style="color:var(--text3);font-size:11px;">${c.company}</div>` : '<span style="color:var(--text3)">—</span>'}
+      </td>
+      <td style="font-size:12px;color:var(--text3);">${c.category||'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function openPanel(id) {
+  const c = contacts.find(x => x.id === id);
+  if (!c) return;
+  activeId = id;
+  renderTable();
+
+  const meta = urgMeta(c.urgency, c.checkInD, c.checkInR);
+  document.getElementById('panelName').textContent = c.name;
+  document.getElementById('panelSub').textContent  = [c.position, c.company].filter(Boolean).join(' · ') || 'No info on file';
+
+  let html = '';
+
+  if (c.checkInD) {
+    html += `<div class="checkin-banner">
+      <div class="checkin-label">Check-in target</div>
+      <div class="checkin-val">${fmtDate(c.checkInD)}${c.checkInR ? ` &mdash; ${c.checkInR}` : ''}</div>
+    </div>`;
+  }
+
+  html += `<div class="urg-banner">
+    <div class="urg-banner-score ${meta.cls}">${meta.label}</div>
+    <div class="urg-banner-label">${c.ds !== null ? `Last contacted ${c.ds} days ago` : 'No contact date on file'}</div>
+  </div>`;
+
+  html += `<div class="section-label">Details</div>
+  <div class="detail-grid">
+    <div class="detail-field"><div class="detail-field-label">Frequency</div><div class="detail-field-val">${freqInfo(c.freq).label}</div></div>
+    <div class="detail-field"><div class="detail-field-label">Freq (days)</div><div class="detail-field-val">${c.freqDays||'—'}</div></div>
+    <div class="detail-field"><div class="detail-field-label">Last contacted</div><div class="detail-field-val">${fmtDate(c.lastCont)}</div></div>
+    <div class="detail-field"><div class="detail-field-label">Category</div><div class="detail-field-val">${c.category||'—'}</div></div>
+  </div>`;
+
+  if (c.notes && c.notes !== 'nan') {
+    html += `<div class="section-label">Notes</div><div class="notes-box">${c.notes}</div>`;
+  }
+
+  document.getElementById('panelBody').innerHTML = html;
+  document.getElementById('panel').classList.add('open');
+  document.getElementById('overlay').classList.add('show');
+}
+
+function closePanel() {
+  activeId = null;
+  document.getElementById('panel').classList.remove('open');
+  document.getElementById('overlay').classList.remove('show');
+  renderTable();
+}
+
+function resetApp() {
+  contacts = []; activeId = null;
+  document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('uploadScreen').style.display = 'flex';
+  document.getElementById('fileInput').value = '';
+  closePanel();
+}
+
+// File loading
+const zone  = document.getElementById('uploadZone');
+const input = document.getElementById('fileInput');
+
+zone.addEventListener('click', () => input.click());
+input.addEventListener('change', e => { if (e.target.files[0]) readFile(e.target.files[0]); });
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+zone.addEventListener('drop', e => {
+  e.preventDefault(); zone.classList.remove('drag');
+  if (e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]);
+});
+
+function readFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wb   = XLSX.read(e.target.result, { type:'binary', cellDates:true });
+    const ws   = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval:'' });
+    loadContacts(rows);
+    document.getElementById('uploadScreen').style.display = 'none';
+    document.getElementById('appScreen').style.display   = 'flex';
+    document.getElementById('topDate').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+    renderStats();
+    renderTable();
+  };
+  reader.readAsBinaryString(file);
+}
+</script>
+</body>
+</html>
